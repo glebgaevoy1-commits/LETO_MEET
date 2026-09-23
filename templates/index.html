@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#dfc878">
+  <title>LETOMEET - Каталог событий в школе</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script src="{{ url_for('static', filename='script.js') }}" defer></script>
+</head>
+<body>
+  <header>
+    <a class="logo" href="#home" aria-label="LETOMEET — главная">LETOMEET</a>
+    <nav aria-label="Навигация" id="navigation" hidden>
+      <a href="#catalog">Каталог</a>
+      <a href="#create">Добавить событие</a>
+    </nav>
+  </header>
+
+  <main id="content"></main>
+
+  <dialog id="contacts">
+    <div class="dialog-heading">
+      <h2>Ты в списке!</h2>
+      <button id="close-dialog" class="plain" aria-label="Закрыть">×</button>
+    </div>
+    <p>Договориться о деталях можно здесь:</p>
+    <div id="dialog-links"></div>
+    <button id="done-dialog" class="primary">Понятно</button>
+  </dialog>
+</body>
+</html>
