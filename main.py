@@ -8,7 +8,7 @@ app = Flask(__name__)
 # -----------------------------
 # Database Setup
 # -----------------------------
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///school.db'
+app.config['SQLALCHEMY_DATABASE_URI'] =  'postgresql://neondb_owner:npg_sZ0B8XOIljof@ep-small-cell-b4aenpa8-pooler.c-6.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
@@ -17,7 +17,7 @@ db = SQLAlchemy(app)
 # -----------------------------
 
 class Event(db.Model):
-    #NEEDS starttime, endtime, datecreated, duration, viewcount, maxattend, attendammount and a better loc system
+    #NEEDS starttime, endtime, datecreated, duration, viewcount, maxattend, attendammount and a better loc system, show all events when nothing is selected, add hub, * when field is required
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(150), nullable=False)
     summary = db.Column(db.String(300), nullable=True)
