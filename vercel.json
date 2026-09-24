@@ -8,6 +8,10 @@
   ],
   "routes": [
     {
+      "src": "/favicon.ico",
+      "dest": "static/favicon.ico"
+    },
+    {
       "src": "/(.*)",
       "dest": "main.py"
     }

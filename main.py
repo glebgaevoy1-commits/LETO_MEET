@@ -8,7 +8,8 @@ app = Flask(__name__)
 # -----------------------------
 # Database Setup
 # -----------------------------
-app.config['SQLALCHEMY_DATABASE_URI'] =  'postgresql://neondb_owner:npg_sZ0B8XOIljof@ep-small-cell-b4aenpa8-pooler.c-6.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require'
+import os
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
@@ -114,6 +115,10 @@ def filter_events(query_base, args):
 @app.get("/events")
 @app.get("/events/<int:event_id>")
 @app.get("/map")
+@app.get('/favicon.ico')
+def favicon():
+    return '', 204
+
 def index_pages(event_id=None):
     return render_template("index.html")
 
@@ -183,3 +188,5 @@ def api_create_event():
 
 if __name__ == "__main__":
     app.run(debug=True)
+
+app = app
