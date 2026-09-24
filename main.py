@@ -1,13 +1,12 @@
 from flask import Flask, jsonify, render_template, request
 from flask_sqlalchemy import SQLAlchemy
+import os
 
 app = Flask(__name__)  # Keep it named exactly "app"
 
 # -----------------------------
 # Database Setup
 # -----------------------------
-
-import os
 
 # Secure environment check
 database_url = os.environ.get('DATABASE_URL')
@@ -19,9 +18,12 @@ if database_url:
     app.config['SQLALCHEMY_DATABASE_URI'] = database_url
 else:
     # Absolute local fallback so the application doesn't throw a boot 500 error
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///school.db'
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# FIX #1: Actually define the 'db' variable so the Event model works!
+db = SQLAlchemy(app)
 
 
 # -----------------------------
@@ -29,7 +31,6 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 # -----------------------------
 
 class Event(db.Model):
-    #NEEDS starttime, endtime, datecreated, duration, viewcount, maxattend, attendammount and a better loc system, show all events when nothing is selected, add hub, * when field is required
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(150), nullable=False)
     summary = db.Column(db.String(300), nullable=True)
@@ -40,7 +41,7 @@ class Event(db.Model):
     place = db.Column(db.String(100), nullable=False)
     room = db.Column(db.String(100), nullable=False)
     date = db.Column(db.String(20), nullable=False)
-    time = db.Column(db.String(10), nullable=False) #replace with start and end, add duration filter
+    time = db.Column(db.String(10), nullable=False) 
     end = db.Column(db.String(10), nullable=False)
     regular = db.Column(db.Boolean, default=False)
     organizer = db.Column(db.String(100), nullable=False)
@@ -69,6 +70,11 @@ class Event(db.Model):
             "chat": self.chat,
             "contact": self.contact
         }
+
+# Automatically build database tables when the app runs
+with app.app_context():
+    db.create_all()
+
 
 FILTER_GROUPS = [
     {
@@ -99,13 +105,11 @@ FILTER_GROUPS = [
 
 def filter_events(query_base, args):
     """Server-side filtering translated to SQL queries."""
-    # Filter by specific selected sidebar options
     for group in FILTER_GROUPS:
         selected = args.getlist(group["key"])
         if selected:
             query_base = query_base.filter(getattr(Event, group["key"]).in_(selected))
 
-    # Filter by date ranges
     date_from = args.get("from", "")
     date_to = args.get("to", "")
 
@@ -114,22 +118,21 @@ def filter_events(query_base, args):
     if date_to:
         query_base = query_base.filter(Event.date <= date_to)
 
-    # Sort results by date and then time
     return query_base.order_by(Event.date, Event.time).all()
 
 
 # -----------------------------
-# Pages
+# Pages (FIX #2: Cleaned up overlapped routing decorators)
 # -----------------------------
+
+@app.get('/favicon.ico')
+def favicon():
+    return '', 204
 
 @app.get("/")
 @app.get("/events")
 @app.get("/events/<int:event_id>")
 @app.get("/map")
-@app.get('/favicon.ico')
-def favicon():
-    return '', 204
-
 def index_pages(event_id=None):
     return render_template("index.html")
 
@@ -140,7 +143,6 @@ def index_pages(event_id=None):
 
 @app.get("/api/events")
 def api_events():
-    # Grabs clean events from the database file
     filtered = filter_events(Event.query, request.args)
     return jsonify([event.to_dict() for event in filtered])
 
@@ -171,7 +173,6 @@ def api_create_event():
     if data["end"] <= data["time"]:
         return jsonify({"error": "Окончание должно быть позже начала"}), 400
 
-    # Create the new SQL record
     new_event = Event(
         title=str(data["title"]).strip(),
         summary=str(data.get("summary", "")).strip(),
@@ -191,7 +192,6 @@ def api_create_event():
         contact=str(data.get("contact", "")).strip()
     )
 
-    # Save it straight to the .db file
     db.session.add(new_event)
     db.session.commit()
 
@@ -199,5 +199,3 @@ def api_create_event():
 
 if __name__ == "__main__":
     app.run(debug=True)
-
-app = app
