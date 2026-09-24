@@ -6,10 +6,23 @@ app = Flask(__name__)  # Keep it named exactly "app"
 # -----------------------------
 # Database Setup
 # -----------------------------
+
 import os
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL')
+
+# Secure environment check
+database_url = os.environ.get('DATABASE_URL')
+
+if database_url:
+    # Safely convert old dialect standards if copied incorrectly
+    if database_url.startswith("postgres://"):
+        database_url = database_url.replace("postgres://", "postgresql://", 1)
+    app.config['SQLALCHEMY_DATABASE_URI'] = database_url
+else:
+    # Absolute local fallback so the application doesn't throw a boot 500 error
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
+
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-db = SQLAlchemy(app)
+
 
 # -----------------------------
 # Data model
