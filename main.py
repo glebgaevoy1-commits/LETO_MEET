@@ -1,9 +1,7 @@
 from flask import Flask, jsonify, render_template, request
 from flask_sqlalchemy import SQLAlchemy
-from dataclasses import dataclass, asdict
-from typing import Optional
 
-app = Flask(__name__)
+app = Flask(__name__)  # Keep it named exactly "app"
 
 # -----------------------------
 # Database Setup
