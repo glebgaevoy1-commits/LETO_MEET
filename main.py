@@ -1,142 +1,62 @@
 from flask import Flask, jsonify, render_template, request
+from flask_sqlalchemy import SQLAlchemy
 from dataclasses import dataclass, asdict
 from typing import Optional
 
 app = Flask(__name__)
 
+# -----------------------------
+# Database Setup
+# -----------------------------
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///school.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+db = SQLAlchemy(app)
 
 # -----------------------------
 # Data model
 # -----------------------------
 
-@dataclass
-class Event:
-    id: int
-    title: str
-    summary: str
-    description: str
-    activity: str
-    type: str
-    duration: str
-    place: str
-    room: str
-    date: str
-    time: str
-    end: str
-    regular: bool
-    organizer: str
-    count: int = 0
-    chat: str = ""
-    contact: str = ""
+class Event(db.Model):
+    #NEEDS starttime, endtime, datecreated, duration, viewcount, maxattend, attendammount and a better loc system
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(150), nullable=False)
+    summary = db.Column(db.String(300), nullable=True)
+    description = db.Column(db.Text, nullable=False)
+    activity = db.Column(db.String(100), nullable=False)
+    type = db.Column(db.String(100), nullable=False)
+    duration = db.Column(db.String(50), nullable=False)
+    place = db.Column(db.String(100), nullable=False)
+    room = db.Column(db.String(100), nullable=False)
+    date = db.Column(db.String(20), nullable=False)
+    time = db.Column(db.String(10), nullable=False) #replace with start and end, add duration filter
+    end = db.Column(db.String(10), nullable=False)
+    regular = db.Column(db.Boolean, default=False)
+    organizer = db.Column(db.String(100), nullable=False)
+    count = db.Column(db.Integer, default=0)
+    chat = db.Column(db.String(200), default="")
+    contact = db.Column(db.String(200), default="")
 
-
-# Temporary in-memory data.
-# Later this list can be replaced with a database.
-events = [
-    Event(
-        id=1,
-        title="Погамать в доту на чилле",
-        summary="Собираем команду на пару каток, йоу",
-        description="Соберёмся на часок, спокойно погамаем. Зовите всех, кого знаете, мне одному плохо.\n\nНоутбук и наушники сами берите. Вопросы в чат пж",
-        activity="Компьютерные игры",
-        type="Просто сбор",
-        duration="Пара часов",
-        place="8 дом",
-        room="Гостиная на 2 этаже",
-        date="2026-09-19",
-        time="17:00",
-        end="19:00",
-        regular=False,
-        organizer="Михаил",
-        count=4,
-    ),
-    Event(
-        id=2,
-        title="Настолки после уроков",
-        summary="«Кодовые имена», «Каркассон» и то, что принесёте с собой.",
-        description="Выберем игру на месте: монополия, манчкин и тд. Кто правил не знает - научим, без б.\n\nЕсли есть своя настолка, приносите! :D",
-        activity="Настольные игры",
-        type="Просто сбор",
-        duration="Пара часов",
-        place="9 дом",
-        room="Гостиная, 1 этаж",
-        date="2026-09-19",
-        time="18:00",
-        end="20:00",
-        regular=False,
-        organizer="Аня Гречкина",
-        count=7,
-    ),
-    Event(
-        id=3,
-        title="Dota 2. Турнир",
-        summary="Турнир по командам. можно без команды, подберём.",
-        description="команд 3-5 будет. всё остальное обсудим в чате.",
-        activity="Компьютерные игры",
-        type="Турнир",
-        duration="Более 5 часов",
-        place="Li4",
-        room="201",
-        date="2026-09-20",
-        time="12:00",
-        end="18:00",
-        regular=False,
-        organizer="Иван Преображенский",
-        count=12,
-    ),
-    Event(
-        id=4,
-        title="Порисульки :>",
-        summary="Скетчбуки, карандаши и полчаса для своих идей, ну не вайбик ли (❁´◡`❁)",
-        description="Небольшая встреча для тех, кто хочет порисовать в компании, общей темы нет, а может будет - каждый рисует своё или нет.\n\nЖелательно возьмите свои скетчбуки, материалы, но так-то бумага будет у нас).",
-        activity="Рисование",
-        type="Просто сбор",
-        duration="Менее часа",
-        place="Школа",
-        room="AS1",
-        date="2026-09-21",
-        time="16:30",
-        end="20:00",
-        regular=True,
-        organizer="Соня :>>",
-        count=3,
-    ),
-    Event(
-        id=5,
-        title="Партия в шахматы",
-        summary="Играем, разбираем позиции и учимся друг у друга.",
-        description="Приходите несмотря на рейтинг. Найдём соперника и при желании разберём партию вместе.",
-        activity="Настольные игры",
-        type="Клуб",
-        duration="Менее часа",
-        place="Школа",
-        room="Библиотека, общий зал",
-        date="2026-09-22",
-        time="17:00",
-        end="18:30",
-        regular=True,
-        organizer="Владимир",
-        count=6,
-    ),
-    Event(
-        id=6,
-        title="Прогулка после ужина",
-        summary="Пару кругов по территории и разговоры обо всём и не о чём, о возвышенным и о повседневном.",
-        description="Собираемся у южного выхода. Если будет дождь, на балкончиках соберёмся",
-        activity="Прогулка",
-        type="Просто сбор",
-        duration="Менее часа",
-        place="Улица",
-        room="У главного входа",
-        date="2026-09-23",
-        time="19:30",
-        end="20:00",
-        regular=False,
-        organizer="Таисия",
-        count=5,
-    ),
-]
-
+    def to_dict(self):
+        """Converts the SQL row into a regular dictionary for the API responses"""
+        return {
+            "id": self.id,
+            "title": self.title,
+            "summary": self.summary,
+            "description": self.description,
+            "activity": self.activity,
+            "type": self.type,
+            "duration": self.duration,
+            "place": self.place,
+            "room": self.room,
+            "date": self.date,
+            "time": self.time,
+            "end": self.end,
+            "regular": self.regular,
+            "organizer": self.organizer,
+            "count": self.count,
+            "chat": self.chat,
+            "contact": self.contact
+        }
 
 FILTER_GROUPS = [
     {
@@ -161,33 +81,29 @@ FILTER_GROUPS = [
     },
 ]
 
-
 # -----------------------------
 # Helpers
 # -----------------------------
 
-def find_event(event_id: int) -> Optional[Event]:
-    return next((event for event in events if event.id == event_id), None)
-
-
-def filter_events(items, args):
-    """Server-side filtering. The frontend also filters for instant UX."""
-    result = list(items)
-
+def filter_events(query_base, args):
+    """Server-side filtering translated to SQL queries."""
+    # Filter by specific selected sidebar options
     for group in FILTER_GROUPS:
         selected = args.getlist(group["key"])
         if selected:
-            result = [event for event in result if getattr(event, group["key"]) in selected]
+            query_base = query_base.filter(getattr(Event, group["key"]).in_(selected))
 
+    # Filter by date ranges
     date_from = args.get("from", "")
     date_to = args.get("to", "")
 
     if date_from:
-        result = [event for event in result if event.date >= date_from]
+        query_base = query_base.filter(Event.date >= date_from)
     if date_to:
-        result = [event for event in result if event.date <= date_to]
+        query_base = query_base.filter(Event.date <= date_to)
 
-    return sorted(result, key=lambda event: event.date + event.time)
+    # Sort results by date and then time
+    return query_base.order_by(Event.date, Event.time).all()
 
 
 # -----------------------------
@@ -195,27 +111,10 @@ def filter_events(items, args):
 # -----------------------------
 
 @app.get("/")
-def index():
-    return render_template("index.html")
-
-
 @app.get("/events")
-def events_page():
-    return render_template("index.html")
-
-
 @app.get("/events/<int:event_id>")
-def event_page(event_id):
-    # The SPA handles the visual page. This endpoint is kept for normal
-    # Flask navigation/API compatibility.
-    if find_event(event_id) is None:
-        return "Event not found", 404
-    return render_template("index.html")
-
-
 @app.get("/map")
-def map_page():
-    # Map UI can be added to the same frontend later.
+def index_pages(event_id=None):
     return render_template("index.html")
 
 
@@ -225,29 +124,23 @@ def map_page():
 
 @app.get("/api/events")
 def api_events():
-    filtered = filter_events(events, request.args)
-    return jsonify([asdict(event) for event in filtered])
-
+    # Grabs clean events from the database file
+    filtered = filter_events(Event.query, request.args)
+    return jsonify([event.to_dict() for event in filtered])
 
 @app.get("/api/events/<int:event_id>")
 def api_event(event_id):
-    event = find_event(event_id)
+    event = Event.query.get(event_id)
     if event is None:
         return jsonify({"error": "Event not found"}), 404
-    return jsonify(asdict(event))
-
+    return jsonify(event.to_dict())
 
 @app.get("/api/filter-groups")
 def api_filter_groups():
     return jsonify(FILTER_GROUPS)
 
-
 @app.post("/api/events")
 def api_create_event():
-    """
-    Creates an event in memory.
-    Replace this with database persistence and moderation later.
-    """
     data = request.get_json(silent=True) or {}
 
     required = [
@@ -262,10 +155,8 @@ def api_create_event():
     if data["end"] <= data["time"]:
         return jsonify({"error": "Окончание должно быть позже начала"}), 400
 
-    next_id = max((event.id for event in events), default=0) + 1
-
-    event = Event(
-        id=next_id,
+    # Create the new SQL record
+    new_event = Event(
         title=str(data["title"]).strip(),
         summary=str(data.get("summary", "")).strip(),
         description=str(data["description"]).strip(),
@@ -281,12 +172,14 @@ def api_create_event():
         organizer=str(data["organizer"]).strip(),
         count=0,
         chat=str(data.get("chat", "")).strip(),
-        contact=str(data.get("contact", "")).strip(),
+        contact=str(data.get("contact", "")).strip()
     )
 
-    events.append(event)
-    return jsonify(asdict(event)), 201
+    # Save it straight to the .db file
+    db.session.add(new_event)
+    db.session.commit()
 
+    return jsonify(new_event.to_dict()), 201
 
 if __name__ == "__main__":
     app.run(debug=True)
