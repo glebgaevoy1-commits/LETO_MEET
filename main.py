@@ -12,17 +12,20 @@ app = Flask(__name__)  # Keep it named exactly "app"
 database_url = os.environ.get('DATABASE_URL')
 
 if database_url:
-    # Safely convert old dialect standards if copied incorrectly
     if database_url.startswith("postgres://"):
         database_url = database_url.replace("postgres://", "postgresql://", 1)
     app.config['SQLALCHEMY_DATABASE_URI'] = database_url
 else:
-    # Absolute local fallback so the application doesn't throw a boot 500 error
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///school.db'
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# FIX #1: Actually define the 'db' variable so the Event model works!
+# Add engine options here to prevent Vercel connection exhaustion
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+    "pool_pre_ping": True,
+    "pool_recycle": 300,
+}
+
 db = SQLAlchemy(app)
 
 
