@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>LETOMEET — Админка</title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='style.css') }}"
+    >
+</head>
+
+<body>
+
+    <h1>Админ-панель LETOMEET</h1>
+
+    <div>
+        <p>Пользователей: <span id="users">—</span></p>
+        <p>Администраторов: <span id="admins">—</span></p>
+    </div>
+
+    <h2>Пользователи</h2>
+
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Имя</th>
+                <th>Email</th>
+                <th>Роль</th>
+            </tr>
+        </thead>
+
+        <tbody id="users-table"></tbody>
+    </table>
+
+    <script>
+        async function loadAdminData() {
+            const statsResponse = await fetch("/api/admin/stats");
+
+            if (!statsResponse.ok) {
+                alert("Нет доступа к админке");
+                return;
+            }
+
+            const stats = await statsResponse.json();
+
+            document.getElementById("users").textContent = stats.users;
+            document.getElementById("admins").textContent = stats.admins;
+
+
+            const usersResponse = await fetch("/api/admin/users");
+            const data = await usersResponse.json();
+
+            const table = document.getElementById("users-table");
+
+            table.innerHTML = "";
+
+            data.users.forEach(user => {
+                const row = document.createElement("tr");
+
+                row.innerHTML = `
+                    <td>${user.id}</td>
+                    <td>${user.username}</td>
+                    <td>${user.email}</td>
+                    <td>${user.role}</td>
+                `;
+
+                table.appendChild(row);
+            });
+        }
+
+        loadAdminData();
+    </script>
+
+</body>
+</html>

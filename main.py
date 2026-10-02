@@ -7,12 +7,12 @@ import smtplib
 import secrets
 import os
 
-app = Flask(__name__)  # Keep it named exactly "app"
+app = Flask(__name__)
 
-# -----------------------------
-# Database Setup
-# -----------------------------
-app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY")
+app.config["SECRET_KEY"] = os.environ.get(
+    "SECRET_KEY",
+    "dev-secret-key"
+)
 
 if not app.config["SECRET_KEY"]:
     raise RuntimeError("SECRET_KEY is not configured")
@@ -37,7 +37,7 @@ app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
 
 db = SQLAlchemy(app)
 
-
+ADMIN_EMAIL = '2028vasiliev.ea@student.letovo.ru'
 # -----------------------------
 # Data model
 # -----------------------------
@@ -171,9 +171,7 @@ def valid_letovo_email(email):
 
 
 def ensure_admin():
-    admin_email = normalize_email(
-        os.environ.get("ADMIN_EMAIL", "")
-    )
+    admin_email = normalize_email(ADMIN_EMAIL)
 
     if not admin_email:
         return
@@ -364,6 +362,18 @@ def api_event(event_id):
 @app.get("/api/filter-groups")
 def api_filter_groups():
     return jsonify(FILTER_GROUPS)
+
+@app.get("/admin")
+def admin_page():
+    user = current_user()
+
+    if not user:
+        return render_template("index.html")
+
+    if user.role != "admin":
+        return render_template("index.html")
+
+    return render_template("admin.html")
 
 @app.post("/api/events")
 def api_create_event():
