@@ -1,3 +1,4 @@
+let currentUser = null;
 const content = document.querySelector('#content');
 const navigation = document.querySelector('#navigation');
 const dialog = document.querySelector('#contacts');
@@ -108,6 +109,497 @@ function readFilters(form) {
   return valid;
 }
 
+async function loadUser() {
+  try {
+    const response = await fetch('/api/auth/me');
+
+    if (!response.ok) {
+      currentUser = null;
+      return;
+    }
+
+    const data = await response.json();
+    currentUser = data.user;
+  } catch {
+    currentUser = null;
+  }
+
+  updateAuthPanel();
+}
+
+function updateAuthPanel() {
+  const panel = document.querySelector('#auth-panel');
+
+  if (!panel) return;
+
+  if (!currentUser) {
+    panel.innerHTML = `
+      <div class="auth-links">
+        <a href="#login">Войти</a>
+        <a href="#register">Регистрация</a>
+      </div>
+    `;
+
+    return;
+  }
+
+  panel.innerHTML = `
+    <div class="auth-user">
+      <span>
+        Вы вошли как
+        <strong>${escapeHtml(currentUser.username)}</strong>
+      </span>
+
+      ${
+        currentUser.role === 'admin'
+          ? `<a href="#admin">Админ</a>`
+          : ''
+      }
+
+      <button id="logout-button" class="plain">
+        Выйти
+      </button>
+    </div>
+  `;
+
+  document.querySelector('#logout-button').onclick =
+    async () => {
+      await fetch('/api/auth/logout', {
+        method: 'POST'
+      });
+
+      currentUser = null;
+
+      location.hash = 'home';
+      render();
+      updateAuthPanel();
+    };
+}
+
+function registerPage(step = 1, email = '') {
+  if (step === 1) {
+    content.innerHTML = `
+      <section class="auth-page">
+        <a class="back" href="#home">← На главную</a>
+
+        <h1>Регистрация</h1>
+
+        <form id="register-form">
+
+          <label class="field">
+            Имя
+            <input
+              name="username"
+              maxlength="80"
+              required
+              placeholder="Например, Егор"
+            >
+          </label>
+
+          <label class="field">
+            Почта
+            <input
+              name="email"
+              type="email"
+              required
+              placeholder="name@student.letovo.ru"
+            >
+          </label>
+
+          <p class="small muted">
+            Используйте школьную почту
+            @student.letovo.ru или @letovo.ru.
+          </p>
+
+          <p id="auth-error" class="error"></p>
+
+          <button class="primary" type="submit">
+            Получить код
+          </button>
+
+        </form>
+
+        <p>
+          Уже есть аккаунт?
+          <a href="#login">Войти</a>
+        </p>
+      </section>
+    `;
+
+    document.querySelector('#register-form').onsubmit =
+      async event => {
+
+        event.preventDefault();
+
+        const data = Object.fromEntries(
+          new FormData(event.currentTarget)
+        );
+
+        const error = document.querySelector('#auth-error');
+
+        try {
+          const response = await fetch(
+            '/api/auth/register/request',
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify(data)
+            }
+          );
+
+          const result = await response.json();
+
+          if (!response.ok) {
+            error.textContent =
+              result.error || 'Не удалось отправить код.';
+            return;
+          }
+
+          registerPage(2, data.email);
+
+        } catch {
+          error.textContent =
+            'Сервер недоступен.';
+        }
+      };
+
+    return;
+  }
+
+  content.innerHTML = `
+    <section class="auth-page">
+      <a class="back" href="#home">← На главную</a>
+
+      <h1>Подтверждение</h1>
+
+      <p>
+        Мы отправили 6-значный код на
+        <strong>${escapeHtml(email)}</strong>.
+      </p>
+
+      <form id="register-code-form">
+
+        <label class="field">
+          Код
+          <input
+            name="code"
+            inputmode="numeric"
+            autocomplete="one-time-code"
+            maxlength="6"
+            required
+            placeholder="123456"
+          >
+        </label>
+
+        <p id="auth-error" class="error"></p>
+
+        <button class="primary" type="submit">
+          Создать аккаунт
+        </button>
+
+      </form>
+    </section>
+  `;
+
+  document.querySelector('#register-code-form').onsubmit =
+    async event => {
+
+      event.preventDefault();
+
+      const data = Object.fromEntries(
+        new FormData(event.currentTarget)
+      );
+
+      data.email = email;
+
+      const error = document.querySelector('#auth-error');
+
+      try {
+        const response = await fetch(
+          '/api/auth/register/verify',
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+          }
+        );
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          error.textContent =
+            result.error || 'Неверный код.';
+          return;
+        }
+
+        currentUser = result.user;
+
+        updateAuthPanel();
+
+        location.hash = 'home';
+
+      } catch {
+        error.textContent =
+          'Сервер недоступен.';
+      }
+    };
+}
+
+function loginPage(step = 1, email = '') {
+  if (step === 1) {
+    content.innerHTML = `
+      <section class="auth-page">
+        <a class="back" href="#home">← На главную</a>
+
+        <h1>Вход</h1>
+
+        <form id="login-form">
+
+          <label class="field">
+            Почта
+            <input
+              name="email"
+              type="email"
+              required
+              placeholder="name@student.letovo.ru"
+            >
+          </label>
+
+          <p id="auth-error" class="error"></p>
+
+          <button class="primary" type="submit">
+            Получить код
+          </button>
+
+        </form>
+
+        <p>
+          Нет аккаунта?
+          <a href="#register">Зарегистрироваться</a>
+        </p>
+      </section>
+    `;
+
+    document.querySelector('#login-form').onsubmit =
+      async event => {
+
+        event.preventDefault();
+
+        const data = Object.fromEntries(
+          new FormData(event.currentTarget)
+        );
+
+        const error = document.querySelector('#auth-error');
+
+        try {
+          const response = await fetch(
+            '/api/auth/login/request',
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify(data)
+            }
+          );
+
+          const result = await response.json();
+
+          if (!response.ok) {
+            error.textContent =
+              result.error || 'Не удалось отправить код.';
+            return;
+          }
+
+          loginPage(2, data.email);
+
+        } catch {
+          error.textContent =
+            'Сервер недоступен.';
+        }
+      };
+
+    return;
+  }
+
+  content.innerHTML = `
+    <section class="auth-page">
+      <a class="back" href="#home">← На главную</a>
+
+      <h1>Введите код</h1>
+
+      <p>
+        Код отправлен на
+        <strong>${escapeHtml(email)}</strong>.
+      </p>
+
+      <form id="login-code-form">
+
+        <label class="field">
+          Код
+          <input
+            name="code"
+            inputmode="numeric"
+            autocomplete="one-time-code"
+            maxlength="6"
+            required
+            placeholder="123456"
+          >
+        </label>
+
+        <p id="auth-error" class="error"></p>
+
+        <button class="primary" type="submit">
+          Войти
+        </button>
+
+      </form>
+    </section>
+  `;
+
+  document.querySelector('#login-code-form').onsubmit =
+    async event => {
+
+      event.preventDefault();
+
+      const data = Object.fromEntries(
+        new FormData(event.currentTarget)
+      );
+
+      data.email = email;
+
+      const error = document.querySelector('#auth-error');
+
+      try {
+        const response = await fetch(
+          '/api/auth/login/verify',
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+          }
+        );
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          error.textContent =
+            result.error || 'Неверный код.';
+          return;
+        }
+
+        currentUser = result.user;
+
+        updateAuthPanel();
+
+        location.hash = 'home';
+
+      } catch {
+        error.textContent =
+          'Сервер недоступен.';
+      }
+    };
+}
+
+async function adminPage() {
+  if (!currentUser || currentUser.role !== 'admin') {
+    content.innerHTML = `
+      <section class="empty">
+        <h1>Доступ запрещён</h1>
+        <p class="muted">
+          Эта страница доступна только администраторам.
+        </p>
+        <a href="#home">На главную</a>
+      </section>
+    `;
+
+    return;
+  }
+
+  content.innerHTML = `
+    <section class="admin-page">
+
+      <a class="back" href="#home">
+        ← На главную
+      </a>
+
+      <h1>Админ-панель</h1>
+
+      <div id="admin-stats" class="admin-stats">
+        Загрузка...
+      </div>
+
+      <section class="form-section">
+        <h2>Пользователи</h2>
+
+        <div id="admin-users">
+          Загрузка...
+        </div>
+      </section>
+
+    </section>
+  `;
+
+  try {
+    const [statsResponse, usersResponse] =
+      await Promise.all([
+        fetch('/api/admin/stats'),
+        fetch('/api/admin/users')
+      ]);
+
+    if (!statsResponse.ok || !usersResponse.ok) {
+      throw new Error();
+    }
+
+    const stats = await statsResponse.json();
+    const users = await usersResponse.json();
+
+    document.querySelector('#admin-stats').innerHTML = `
+      <div class="admin-stat">
+        <strong>${stats.users}</strong>
+        <span>пользователей</span>
+      </div>
+
+      <div class="admin-stat">
+        <strong>${stats.admins}</strong>
+        <span>администраторов</span>
+      </div>
+    `;
+
+    document.querySelector('#admin-users').innerHTML =
+      users.users.length
+        ? users.users.map(user => `
+            <div class="admin-user">
+              <div>
+                <strong>
+                  ${escapeHtml(user.username)}
+                </strong>
+
+                <span class="small muted">
+                  ${escapeHtml(user.email)}
+                </span>
+              </div>
+
+              <span class="tag">
+                ${user.role === 'admin'
+                  ? 'admin'
+                  : 'user'}
+              </span>
+            </div>
+          `).join('')
+        : '<p class="muted">Пользователей пока нет.</p>';
+
+  } catch {
+    document.querySelector('#admin-users').innerHTML =
+      '<p class="error">Не удалось загрузить данные.</p>';
+  }
+}
 
 function clearFilters() {
   filterGroups.forEach(group => {
@@ -521,33 +1013,59 @@ async function render() {
 
   navigation.querySelectorAll('a').forEach(link => {
     link.removeAttribute('aria-current');
-    if (link.hash === '#' + route) link.setAttribute('aria-current', 'page');
+
+    if (link.hash === '#' + route) {
+      link.setAttribute('aria-current', 'page');
+    }
   });
 
   if (route === 'home') {
     homePage();
+
   } else if (route === 'filters') {
     filtersPage();
+
   } else if (route === 'catalog') {
     catalogPage();
+
   } else if (route === 'create') {
     createPage();
+
   } else if (route === 'preview' && draft) {
-    eventPage({...draft, regular: draft.regular === 'true'}, true);
+    eventPage(
+      {...draft, regular: draft.regular === 'true'},
+      true
+    );
+
   } else if (route.startsWith('event/')) {
     const id = Number(route.split('/')[1]);
+
     let event = events.find(item => item.id === id);
 
     if (!event) {
       try {
         const response = await fetch(`/api/events/${id}`);
-        if (response.ok) event = await response.json();
+
+        if (response.ok) {
+          event = await response.json();
+        }
       } catch {}
     }
 
     eventPage(event);
+
+  } else if (route === 'login') {
+    loginPage();
+
+  } else if (route === 'register') {
+    registerPage();
+
+  } else if (route === 'admin') {
+    adminPage();
+
   } else {
-    content.innerHTML = '<h1>Страница не найдена</h1><a href="#home">На главную</a>';
+    content.innerHTML =
+      '<h1>Страница не найдена</h1><a href="#home">На главную</a>';
   }
 
   window.scrollTo(0, 0);
@@ -578,13 +1096,16 @@ window.addEventListener('hashchange', render);
 
 (async function init() {
   try {
+    await loadUser();
     await loadData();
     await render();
   } catch (error) {
     content.innerHTML = `
       <section class="empty">
         <h1>LETOMEET</h1>
-        <p class="error">${escapeHtml(error.message)}</p>
+        <p class="error">
+          ${escapeHtml(error.message)}
+        </p>
         <p>Проверь, что Flask-сервер запущен.</p>
       </section>`;
   }
