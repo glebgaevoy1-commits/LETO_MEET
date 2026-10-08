@@ -113,6 +113,7 @@ class AuthCode(db.Model):
 
 class Event(db.Model):
     id = db.Column(db.Integer, primary_key=True)
+    creator_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
     title = db.Column(db.String(150), nullable=False)
     summary = db.Column(db.String(300), nullable=True)
     description = db.Column(db.Text, nullable=False)
@@ -122,7 +123,7 @@ class Event(db.Model):
     place = db.Column(db.String(100), nullable=False)
     room = db.Column(db.String(100), nullable=False)
     date = db.Column(db.String(20), nullable=False)
-    time = db.Column(db.String(10), nullable=False) 
+    time = db.Column(db.String(10), nullable=False)
     end = db.Column(db.String(10), nullable=False)
     regular = db.Column(db.Boolean, default=False)
     organizer = db.Column(db.String(100), nullable=False)
@@ -135,6 +136,7 @@ class Event(db.Model):
         return {
             "id": self.id,
             "title": self.title,
+            "creator_id": self.creator_id,
             "summary": self.summary,
             "description": self.description,
             "activity": self.activity,
@@ -151,6 +153,27 @@ class Event(db.Model):
             "chat": self.chat,
             "contact": self.contact
         }
+
+
+class Registration(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("user.id"),
+        nullable=False
+    )
+
+    event_id = db.Column(
+        db.Integer,
+        db.ForeignKey("event.id"),
+        nullable=False
+    )
+
+    created_at = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(timezone.utc)
+    )
 
 
 # Automatically build database tables when the app runs
@@ -363,6 +386,102 @@ def api_event(event_id):
 def api_filter_groups():
     return jsonify(FILTER_GROUPS)
 
+@app.route("/api/events/<int:event_id>/join", methods=["POST"])
+def join_event(event_id):
+    # Проверяем, вошёл ли пользователь
+    user_id = session.get("user_id")
+
+    if not user_id:
+        return jsonify({"error": "Необходимо войти в аккаунт"}), 401
+
+    # Проверяем, существует ли мероприятие
+    event = Event.query.get(event_id)
+
+    if not event:
+        return jsonify({"error": "Мероприятие не найдено"}), 404
+
+    # Проверяем, не записан ли пользователь уже
+    existing_registration = Registration.query.filter_by(
+        user_id=user_id,
+        event_id=event_id
+    ).first()
+
+    if existing_registration:
+        return jsonify({"error": "Вы уже записаны на это мероприятие"}), 400
+
+    registration = Registration(
+        user_id=user_id,
+        event_id=event_id
+    )
+
+    db.session.add(registration)
+
+    event.count += 1
+
+    db.session.commit()
+
+    return jsonify({
+        "message": "Вы успешно записались",
+        "event_id": event_id
+    }), 201
+
+
+@app.route("/api/events/<int:event_id>/join", methods=["DELETE"])
+def leave_event(event_id):
+    user_id = session.get("user_id")
+
+    if not user_id:
+        return jsonify({"error": "Необходимо войти в аккаунт"}), 401
+
+    registration = Registration.query.filter_by(
+        user_id=user_id,
+        event_id=event_id
+    ).first()
+
+    if not registration:
+        return jsonify({"error": "Вы не записаны на это мероприятие"}), 400
+
+    event = Event.query.get(event_id)
+
+    if not event:
+        return jsonify({"error": "Мероприятие не найдено"}), 404
+
+    db.session.delete(registration)
+
+    if event.count > 0:
+        event.count -= 1
+
+    db.session.commit()
+
+    return jsonify({
+        "message": "Запись отменена",
+        "event_id": event_id
+    })
+
+
+@app.route("/api/me/registrations", methods=["GET"])
+def my_registrations():
+    user_id = session.get("user_id")
+
+    if not user_id:
+        return jsonify({"error": "Необходимо войти в аккаунт"}), 401
+
+    registrations = Registration.query.filter_by(
+        user_id=user_id
+    ).all()
+
+    events = []
+
+    for registration in registrations:
+        event = Event.query.get(registration.event_id)
+
+        if event:
+            events.append(event.to_dict())
+
+    return jsonify({
+        "events": events
+    })
+
 @app.get("/admin")
 def admin_page():
     user = current_user()
@@ -391,7 +510,15 @@ def api_create_event():
     if data["end"] <= data["time"]:
         return jsonify({"error": "Окончание должно быть позже начала"}), 400
 
+    user_id = session.get("user_id")
+
+    if not user_id:
+        return jsonify({
+            "error": "Необходимо войти в аккаунт"
+        }), 401
+
     new_event = Event(
+        creator_id=user_id,
         title=str(data["title"]).strip(),
         summary=str(data.get("summary", "")).strip(),
         description=str(data["description"]).strip(),
@@ -415,6 +542,25 @@ def api_create_event():
 
     return jsonify(new_event.to_dict()), 201
 
+@app.get("/api/me/events")
+def my_events():
+    user_id = session.get("user_id")
+
+    if not user_id:
+        return jsonify({
+            "error": "Необходимо войти в аккаунт"
+        }), 401
+
+    events = Event.query.filter_by(
+        creator_id=user_id
+    ).order_by(
+        Event.date,
+        Event.time
+    ).all()
+
+    return jsonify({
+        "events": [event.to_dict() for event in events]
+    })
 
 @app.post("/api/auth/register/request")
 def register_request():

@@ -12,7 +12,6 @@ const filters = {
   to: ''
 };
 
-const joined = new Set();
 let draft = null;
 let events = [];
 let filterGroups = [];
@@ -150,15 +149,17 @@ function updateAuthPanel() {
         <strong>${escapeHtml(currentUser.username)}</strong>
       </span>
 
-      ${
-        currentUser.role === 'admin'
-          ? `<a href="#admin">Админ</a>`
-          : ''
-      }
+        <a href="#account">Личный кабинет</a>
 
-      <button id="logout-button" class="plain">
-        Выйти
-      </button>
+        ${
+          currentUser.role === 'admin'
+            ? `<a href="#admin">Админ</a>`
+            : ''
+        }
+
+        <button id="logout-button" class="plain">
+          Выйти
+        </button>
     </div>
   `;
 
@@ -601,6 +602,251 @@ async function adminPage() {
   }
 }
 
+async function accountPage() {
+  if (!currentUser) {
+    content.innerHTML = `
+      <section class="empty">
+        <h1>Личный кабинет</h1>
+        <p class="muted">
+          Чтобы открыть личный кабинет, необходимо войти.
+        </p>
+        <a href="#login">Войти</a>
+      </section>
+    `;
+
+    return;
+  }
+
+  content.innerHTML = `
+    <section class="account-page">
+
+      <a class="back" href="#home">
+        ← На главную
+      </a>
+
+      <h1>Личный кабинет</h1>
+
+      <section class="form-section">
+        <h2>Профиль</h2>
+
+        <div class="account-info">
+          <p>
+            <strong>Имя</strong><br>
+            ${escapeHtml(currentUser.username)}
+          </p>
+
+          <p>
+            <strong>Почта</strong><br>
+            ${escapeHtml(currentUser.email)}
+          </p>
+
+          <p>
+            <strong>Роль</strong><br>
+            ${currentUser.role === 'admin'
+              ? 'Администратор'
+              : 'Ученик'}
+          </p>
+        </div>
+      </section>
+
+      <section class="form-section">
+        <h2>Мои мероприятия</h2>
+
+        <div id="my-events">
+          Загрузка...
+        </div>
+      </section>
+
+      <section class="form-section">
+        <h2>Мои записи</h2>
+
+        <div id="my-registrations">
+          Загрузка...
+        </div>
+      </section>
+
+    </section>
+  `;
+
+  try {
+    const [myEvents, registrations] = await Promise.all([
+      getMyEvents(),
+      getMyRegistrations()
+    ]);
+
+    const eventsContainer =
+      document.querySelector('#my-events');
+
+    const registrationsContainer =
+      document.querySelector('#my-registrations');
+
+
+    // ==========================================
+    // МОИ МЕРОПРИЯТИЯ
+    // ==========================================
+
+    if (!myEvents.length) {
+      eventsContainer.innerHTML = `
+        <div class="empty">
+          <h3>Пока нет мероприятий</h3>
+
+          <p class="muted">
+            Вы ещё не создали ни одного мероприятия.
+          </p>
+
+          <a href="#create">
+            Создать мероприятие
+          </a>
+        </div>
+      `;
+    } else {
+      eventsContainer.innerHTML = myEvents.map(event => `
+        <article class="account-event">
+
+          <div>
+            <h3>
+              ${escapeHtml(event.title)}
+            </h3>
+
+            <p class="meta">
+              <span>
+                ${dateLabel(event.date)}
+                ·
+                ${event.time}–${event.end}
+              </span>
+
+              <span>
+                ${escapeHtml(event.place)}
+                ·
+                ${escapeHtml(event.room)}
+              </span>
+            </p>
+
+            <p class="muted">
+              ${escapeHtml(event.summary)}
+            </p>
+
+            <p class="muted">
+              Участников: ${event.count}
+            </p>
+          </div>
+
+          <div class="account-event-actions">
+            <a
+              class="primary"
+              href="#event/${event.id}"
+            >
+              Открыть
+            </a>
+          </div>
+
+        </article>
+      `).join('');
+    }
+
+
+    // ==========================================
+    // МОИ ЗАПИСИ
+    // ==========================================
+
+    if (!registrations.length) {
+      registrationsContainer.innerHTML = `
+        <div class="empty">
+          <h3>Пока нет записей</h3>
+
+          <p class="muted">
+            Вы ещё не записались ни на одно мероприятие.
+          </p>
+
+          <a href="#catalog">
+            Посмотреть каталог
+          </a>
+        </div>
+      `;
+    } else {
+      registrationsContainer.innerHTML = registrations.map(event => `
+        <article class="account-event">
+
+          <div>
+            <h3>
+              ${escapeHtml(event.title)}
+            </h3>
+
+            <p class="meta">
+              <span>
+                ${dateLabel(event.date)}
+                ·
+                ${event.time}–${event.end}
+              </span>
+
+              <span>
+                ${escapeHtml(event.place)}
+                ·
+                ${escapeHtml(event.room)}
+              </span>
+            </p>
+
+            <p class="muted">
+              ${escapeHtml(event.summary)}
+            </p>
+          </div>
+
+          <div class="account-event-actions">
+            <a
+              class="primary"
+              href="#event/${event.id}"
+            >
+              Открыть
+            </a>
+
+            <button
+              class="secondary"
+              data-leave-event="${event.id}"
+            >
+              Отменить запись
+            </button>
+          </div>
+
+        </article>
+      `).join('');
+
+      document
+        .querySelectorAll('[data-leave-event]')
+        .forEach(button => {
+
+          button.onclick = async () => {
+            const eventId =
+              Number(button.dataset.leaveEvent);
+
+            const success =
+              await leaveEvent(eventId);
+
+            if (!success) {
+              return;
+            }
+
+            await accountPage();
+          };
+        });
+    }
+
+  } catch (error) {
+    console.error(error);
+
+    document.querySelector('#my-events').innerHTML = `
+      <p class="error">
+        Не удалось загрузить ваши мероприятия.
+      </p>
+    `;
+
+    document.querySelector('#my-registrations').innerHTML = `
+      <p class="error">
+        Не удалось загрузить ваши записи.
+      </p>
+    `;
+  }
+}
+
 function clearFilters() {
   filterGroups.forEach(group => {
     filters[group.key] = [];
@@ -691,7 +937,7 @@ function updateList() {
             <div class="chips">${tags(event)}</div>
             <div class="meta">
               <span>Организатор: ${escapeHtml(event.organizer)}</span>
-              <span>Участников: ${event.count + (joined.has(event.id) ? 1 : 0)}</span>
+              <span>Участников: ${event.count}</span>
             </div>
           </a>`
         ).join('')
@@ -753,8 +999,60 @@ function contactLinks(event) {
     }`;
 }
 
+async function joinEvent(eventId) {
+  const response = await fetch(`/api/events/${eventId}/join`, {
+    method: 'POST'
+  });
 
-function eventPage(event, preview = false) {
+  const data = await response.json();
+
+  if (!response.ok) {
+    alert(data.error || 'Не удалось записаться');
+    return false;
+  }
+
+  return true;
+}
+
+async function leaveEvent(eventId) {
+  const response = await fetch(`/api/events/${eventId}/join`, {
+    method: 'DELETE'
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    alert(data.error || 'Не удалось отменить запись');
+    return false;
+  }
+
+  return true;
+}
+
+async function getMyRegistrations() {
+  const response = await fetch('/api/me/registrations');
+
+  if (!response.ok) {
+    throw new Error('Не удалось загрузить записи');
+  }
+
+  const data = await response.json();
+
+  return data.events || [];
+}
+async function getMyEvents() {
+  const response = await fetch('/api/me/events');
+
+  if (!response.ok) {
+    throw new Error('Не удалось загрузить мои мероприятия');
+  }
+
+  const data = await response.json();
+
+  return data.events || [];
+}
+
+async function eventPage(event, preview = false) {
   if (!event) {
     content.innerHTML = '<h1>Событие не найдено</h1><a href="#catalog">Вернуться в каталог</a>';
     return;
@@ -784,13 +1082,18 @@ function eventPage(event, preview = false) {
             preview
               ? ''
               : `<div class="join-line">
-                  <button id="join" class="primary">
-                    ${joined.has(event.id) ? 'Вы идёте · открыть контакты' : 'Я пойду'}
-                  </button>
-                  <span id="count" class="small">
-                    Участников: ${event.count + (joined.has(event.id) ? 1 : 0)}
-                  </span>
-                </div>`
+                <button id="join" class="primary">
+                    Я пойду
+                </button>
+
+                <button id="leave" class="secondary" style="display: none;">
+                    Отменить запись
+                </button>
+
+                <span id="count" class="small">
+                    Участников: ${event.count}
+                </span>
+            </div>`
           }
         </div>
 
@@ -805,17 +1108,83 @@ function eventPage(event, preview = false) {
       </div>
     </article>`;
 
-  if (!preview) {
-    document.querySelector('#join').onclick = () => {
-      joined.add(event.id);
+    if (!preview) {
+      const joinButton = document.querySelector('#join');
+      const leaveButton = document.querySelector('#leave');
 
-      document.querySelector('#join').textContent = 'Вы идёте · открыть контакты';
-      document.querySelector('#count').textContent = 'Участников: ' + (event.count + 1);
-      document.querySelector('#dialog-links').innerHTML = contactLinks(event);
+      if (!currentUser) {
+        joinButton.textContent = 'Войти, чтобы записаться';
+
+        joinButton.onclick = () => {
+          location.hash = 'login';
+        };
+
+        return;
+      }
+
+      const registrations = await getMyRegistrations();
+
+      let isJoined = registrations.some(
+        registeredEvent => registeredEvent.id === event.id
+      );
+
+  if (isJoined) {
+    joinButton.textContent = 'Вы идёте · открыть контакты';
+    leaveButton.style.display = 'inline-block';
+  }
+
+  // Кнопка "Я пойду"
+  joinButton.onclick = async () => {
+    // Если уже записан — открываем контакты
+    if (isJoined) {
+      document.querySelector('#dialog-links').innerHTML =
+        contactLinks(event);
 
       dialog.showModal();
-    };
-  }
+      return;
+    }
+
+    const success = await joinEvent(event.id);
+
+    if (!success) {
+      return;
+    }
+
+    isJoined = true;
+
+    joinButton.textContent = 'Вы идёте · открыть контакты';
+    leaveButton.style.display = 'inline-block';
+
+    event.count += 1;
+
+    document.querySelector('#count').textContent =
+      'Участников: ' + event.count;
+
+    document.querySelector('#dialog-links').innerHTML =
+      contactLinks(event);
+
+    dialog.showModal();
+  };
+
+  // Кнопка "Отменить запись"
+  leaveButton.onclick = async () => {
+    const success = await leaveEvent(event.id);
+
+    if (!success) {
+      return;
+    }
+
+    isJoined = false;
+
+    joinButton.textContent = 'Я пойду';
+    leaveButton.style.display = 'none';
+
+    event.count -= 1;
+
+    document.querySelector('#count').textContent =
+      'Участников: ' + event.count;
+  };
+}
 }
 
 
@@ -832,6 +1201,21 @@ function selectField(key, label, options) {
 
 
 function createPage() {
+  if (!currentUser) {
+    content.innerHTML = `
+      <section class="empty">
+        <h1>Добавить событие</h1>
+
+        <p class="muted">
+          Чтобы создать мероприятие, необходимо войти в аккаунт.
+        </p>
+
+        <a href="#login">Войти</a>
+      </section>
+    `;
+
+    return;
+  }
   const groupsWithoutPlace = filterGroups.filter(group => group.key !== 'place');
   const placeGroup = filterGroups.find(group => group.key === 'place');
 
@@ -919,11 +1303,6 @@ function createPage() {
             </label>
           </div>
         </section>
-
-        <p class="notice">
-          Сейчас событие можно создать прямо через Flask API.
-          Позже сюда можно добавить модерацию и сохранение в базу данных.
-        </p>
 
         <p class="error" id="form-error" role="alert"></p>
         <button class="primary" type="submit">Создать событие</button>
@@ -1052,7 +1431,7 @@ async function render() {
       } catch {}
     }
 
-    eventPage(event);
+    await eventPage(event);
 
   } else if (route === 'login') {
     loginPage();
@@ -1060,8 +1439,11 @@ async function render() {
   } else if (route === 'register') {
     registerPage();
 
-  } else if (route === 'admin') {
-    adminPage();
+    } else if (route === 'admin') {
+      await adminPage();
+
+    } else if (route === 'account') {
+      await accountPage();
 
   } else {
     content.innerHTML =
